@@ -194,6 +194,10 @@ def command_prepare(args: argparse.Namespace) -> None:
     output_dir = Path(args.output_dir).resolve()
     if not source_path.is_file():
         fail(f"Source not found: {source_path}")
+    if args.work_size <= 0:
+        fail("--work-size must be positive")
+    if not math.isfinite(args.max_upscale) or args.max_upscale <= 0:
+        fail("--max-upscale must be a finite positive number")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     with Image.open(source_path) as opened:
@@ -254,8 +258,16 @@ def command_prepare(args: argparse.Namespace) -> None:
     feather, warnings = choose_feather(args.feather, args.edge, target_bbox)
     soft_native = hard_native.filter(ImageFilter.GaussianBlur(radius=feather)) if feather else hard_native.copy()
 
-    scale = min(4.0, max(0.25, args.work_size / max(cw, ch)))
+    requested_scale = max(0.25, args.work_size / max(cw, ch))
+    scale = min(args.max_upscale, requested_scale)
     work_size = (max(1, int(round(cw * scale))), max(1, int(round(ch * scale))))
+    work_size_limited = scale < requested_scale
+    if work_size_limited:
+        warnings.append(
+            f"Working size is limited to {work_size[0]}x{work_size[1]} by "
+            f"--max-upscale {args.max_upscale:g}; requested long edge was {args.work_size}. "
+            "For a detail repair, review the crop and explicitly raise --max-upscale if needed"
+        )
     crop_work = crop_native.resize(work_size, RESAMPLE)
     hard_work = hard_native.resize(work_size, Image.Resampling.NEAREST)
     soft_work = soft_native.resize(work_size, RESAMPLE)
@@ -378,6 +390,9 @@ def command_prepare(args: argparse.Namespace) -> None:
         "local_bbox": list(local_bbox),
         "work_size": list(work_size),
         "work_scale": scale,
+        "requested_work_size": args.work_size,
+        "max_upscale": args.max_upscale,
+        "work_size_limited": work_size_limited,
         "feather": feather,
         "edge": args.edge,
         "mode": args.mode,
@@ -418,6 +433,9 @@ def command_prepare(args: argparse.Namespace) -> None:
                 "context_source": context_source,
                 "target_occupancy": [round(value, 4) for value in occupancy],
                 "work_size": work_size,
+                "work_scale": scale,
+                "max_upscale": args.max_upscale,
+                "work_size_limited": work_size_limited,
                 "coordinate_space": "source_native",
                 "mode": args.mode,
                 "risk": args.risk,
@@ -1018,7 +1036,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional explicit source-native x,y,width,height crop; must fully contain the edit target",
     )
     prepare.add_argument("--min-padding", type=int, default=48)
-    prepare.add_argument("--work-size", type=int, default=1024)
+    prepare.add_argument("--work-size", type=int, default=1024, help="Requested working crop long edge in pixels")
+    prepare.add_argument(
+        "--max-upscale", type=float, default=4.0,
+        help="Maximum native-to-working enlargement (default: 4); raise explicitly for detail crops",
+    )
     prepare.add_argument("--feather", type=float, default=None, help="Explicit feather radius; default is adaptive")
     prepare.add_argument("--edge", choices=["auto", "hard", "soft"], default="auto")
     prepare.add_argument("--shape", choices=["rect", "ellipse"], default="rect")

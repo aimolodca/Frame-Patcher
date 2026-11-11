@@ -1,6 +1,6 @@
 # Frame Patcher
 
-**Version 1.4**
+**Version 1.5.0**
 
 Скилл для ChatGPT и Codex, который точечно чинит, заменяет или добавляет объекты в изображение без перегенерации всего кадра.
 
@@ -9,6 +9,18 @@
 Техническая проверка защищает пиксели вне разрешённой зоны, а отдельная визуальная приёмка проверяет геометрию, силуэты, швы, масштаб, опору и смысловую правильность результата.
 
 Полезен для рук, лиц, надписей, мелких объектов, швов и AI-артефактов, а также для аккуратного добавления новых объектов — особенно когда полнокадровая правка начинает шакалить хороший исходник.
+
+В версии 1.5.0 добавлены:
+
+- отдельный крупный кроп для мелкого текста, логотипа или одной проблемной пачки перед переходом к другой технике;
+- параметр `prepare --max-upscale`: можно явно увеличить маленький фрагмент выше прежнего потолка 4×;
+- фактический рабочий размер, выбранный потолок и предупреждение об ограничении в выводе и манифесте;
+- проверка всей области старых и новых букв без обрезания строк маской;
+- [лог изменений](CHANGELOG.md) и автономные проверки подготовки, увеличения и защиты пикселей.
+
+Пример: нативный кроп 176×176 при `--work-size 1536 --max-upscale 12` становится рабочим изображением 1536×1536. Без изменения потолка он остаётся 704×704. Это помогает редактору работать крупнее; утраченные детали исходника восстанавливаются по визуальному эталону, а не самим увеличением.
+
+Изменение кропа не меняет итоговое кадрирование и не обнуляет лимит попыток.
 
 В версии 1.4 добавлены:
 
@@ -24,6 +36,8 @@
 
 - `SKILL.md` — логика, маршрутизация режимов и рабочий пайплайн.
 - `scripts/patch_tools.py` — подготовка кропов, масок, композитинг и проверка.
+- `references/detail-crops.md` — крупные кропы для упаковки, текста и логотипов.
+- `CHANGELOG.md` — история изменений.
 - `references/additive.md` — добавление новых объектов через post-generation masking.
 - `references/visual-acceptance.md` — приёмка сложных реконструкций и связанных объектов.
 - `agents/openai.yaml` — интерфейс скилла.
@@ -37,6 +51,8 @@ Frame Patcher is a ChatGPT and Codex skill for repairing, replacing, or adding a
 
 For repairs and replacements, it prepares a contextual crop and an exact edit mask before generation. For new objects, the additive workflow generates inside a sufficiently large contextual crop and derives the mask from the actual generated silhouette.
 
+Version 1.5.0 adds a tighter single-object crop route for small lettering and logos, plus an explicit `prepare --max-upscale` control. The default cap remains 4×; the manifest and command output now report when it limits the working size. Crop adjustments preserve the final framing, exact edit mask, generation budget, and registration checks. See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
 Version 1.4 adds a mandatory registration stage before compositing repair, replacement, or integration edits. Editor outputs may not be silently stretched, cropped, or resized into place. Registration is reviewed with checkerboard, protected-overlay, and side-by-side artifacts, and delivery remains blocked until both technical verification and explicit visual acceptance pass.
 
 Technical verification protects pixels outside the authorized region. A separate visual gate checks geometry, silhouette integrity, scale, contact, seams, and semantic correctness. A technically safe composite is never presented as successful until the edited or added object also passes visual review.
@@ -45,6 +61,8 @@ Technical verification protects pixels outside the authorized region. A separate
 
 - `SKILL.md` — routing, workflows, constraints, and stopping rules.
 - `scripts/patch_tools.py` — crop preparation, pre-generation and post-generation masks, compositing, and verification.
+- `references/detail-crops.md` — close crops, working-size controls, and text acceptance.
+- `CHANGELOG.md` — release history.
 - `references/additive.md` — additive workflow and post-generation masking.
 - `references/visual-acceptance.md` — acceptance guidance for reconstruction and dependent objects.
 - `agents/openai.yaml` — skill interface metadata.

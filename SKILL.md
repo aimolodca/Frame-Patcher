@@ -5,9 +5,11 @@ description: Repair, locally replace, integrate, or add a known object in a PNG,
 
 # Frame Patcher
 
-**Version:** 1.4
+**Version:** 1.5.0
 
 Repair the requested zone without regenerating the full frame. Pixel protection and visual correctness are separate acceptance gates: passing `verify` never proves that the repaired object looks correct or belongs in the scene.
+
+For a delegated repair, preserve the mode, accepted source, protected facts and remaining shared limit from [task-contract.md](references/task-contract.md). A local patch does not authorize video or a new design. The tool's retry ceiling never adds attempts to a parent's smaller budget. Use [qa-report.md](references/qa-report.md) when returning a report to a production owner.
 
 ## Modes and preflight
 
@@ -39,9 +41,12 @@ Before editing, define a short task contract:
 - Never make an editor output fit by silently resizing, cropping, stretching, or padding it. Normalize it only through the registration gate below, inspect protected landmarks, and reject coordinate drift before compositing.
 - Do not introduce perspective overlays, manual warps, per-object transforms, code prototypes, or other alternate pipelines unless the user requested them or the agreed generative strategy failed for a named reason and the alternative is approved.
 - Before any retry, identify the specific failed acceptance fact. Do not rerun merely to seek an unspecified improvement.
+- For small text, logos, or repeated packs that remain inaccurate in a group crop, try a tighter single-object crop at a larger working size before proposing overlays or another technique. Read [references/detail-crops.md](references/detail-crops.md). Reframing the editor's input stays within the requested patching method; preserve the final composition and existing generation budget.
 - Use an integration pass only when object identity and geometry already pass but the patch still looks pasted on.
 - Keep intermediate crops, masks, and manifests temporary. Do not publish or persist them as deliverables.
 - Do not narrate every internal operation. User-facing updates should cover meaningful milestones, blockers, or the ready candidate.
+
+Use the bundled [patch_tools.py](scripts/patch_tools.py) for the deterministic gates below.
 
 ## Workflow
 
@@ -53,6 +58,7 @@ Before editing, define a short task contract:
    - Keep the edit mask exact. A larger crop does not authorize a larger changed region.
    - For replacement, the mask must cover the complete outgoing object and every residue that must disappear. If transparent packaging, reflections, shadows, or a native frame must change with it, treat those pixels as one related replacement group instead of masking only the visible label or center.
    - Use `--context-bbox` when the useful context is asymmetric or automatic expansion misses the support plane.
+   - For detail-limited repairs, make the defective object larger within the editor input while retaining its full outline, support, and protected landmarks. Inspect the actual `work_size`: `--work-size` is capped by `--max-upscale` (default `4`). Raise that cap explicitly when a small native crop needs a larger working image; this does not recover missing source detail or authorize a larger edit mask.
 
 ```bash
 python3 <skill-dir>/scripts/patch_tools.py prepare SOURCE PATCH_DIR \
@@ -110,11 +116,11 @@ python3 <skill-dir>/scripts/patch_tools.py stage \
 ```
 
 For additive mode, `postmask` remains the staging gate. Inspect the edited crop and its staged mask before compositing. Reject any mode for shifted protected geometry, wrong count or placement, reference drift, remaining outgoing-object fragments, broken text, perspective or topology, missing contact shadows or reflections, material mismatch, halos, double contours, technical bars, clipped generated silhouettes, or retained regenerated background.
-9. Composite the registered or post-masked crop into the immutable source. `compose` must reject replacement and integration crops without accepted registration, and must reject arbitrary crop dimensions instead of resizing them silently:
+9. Select the exact reviewed input: **replace/integrate** use `PATCH_DIR/edited-staged.png` created by accepted `stage`; **additive** uses the original `EDITED_CROP` passed to `postmask` (the same file/hash), not `edited-staged.png`, which postmask does not create; **repair** uses its inspected edited crop. Substitute that path for `REVIEWED_CROP` below. Composite the registered or post-masked crop into the immutable source. `compose` must reject replacement and integration crops without accepted registration, and must reject arbitrary crop dimensions instead of resizing them silently:
 
 ```bash
 python3 <skill-dir>/scripts/patch_tools.py compose \
-  PATCH_DIR/manifest.json PATCH_DIR/edited-staged.png OUTPUT.png
+  PATCH_DIR/manifest.json REVIEWED_CROP OUTPUT.png
 ```
 
 Use `--grain` only when visible source grain makes the patch unnaturally smooth. Avoid it for text, thin lines, and fragile geometry.
@@ -143,7 +149,7 @@ Never deliver while `delivery_allowed` is false. A technical pass proves only th
 ## Strategy and stopping rules
 
 - Default to one generation attempt. Allow a second only after naming the failed acceptance fact and adjusting the relevant crop, mask, reference, or prompt.
-- After two failures with the same strategy, stop and request a missing reference, change strategy with the user's approval, disclose unresolved uncertainty, or end the patch.
+- After two failures with the same strategy, stop repeating that strategy. A tighter detail crop with the same generator, references, target, and final composition is an in-method adjustment and needs no new permission when the existing budget allows it; it does not reset the attempt count. Before proposing a different technique, check whether insufficient object size caused the failure. Request a missing reference, seek approval for a method change, disclose unresolved uncertainty, or end the patch when no authorized attempt remains.
 - Default to adaptive feathering. Use `--edge hard` for silhouettes, glass, text, and mechanical lines; use `--edge soft` for smoke, fur, or genuinely soft transitions. Never use feathering to hide incorrect geometry.
 - Perspective warping and deterministic overlays are not default repair methods. Use them only when requested or approved after reference-based generation cannot preserve the required design.
 - For an addition, prefer a larger context crop and a post-generation mask over separate guessed masks for each new object. The post mask may include soft contact shadows and reflections, but not unrelated regenerated floor, walls, people, or props.
